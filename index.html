@@ -181,6 +181,30 @@ section .btn:not(.out){background:var(--gold);color:var(--bg)}
 .item.hp{display:grid;grid-template-columns:84px 1fr;column-gap:14px;align-items:start}.item.hp .pic{grid-row:1/span 3;width:84px;height:84px;object-fit:cover;border-radius:12px;background:var(--line)}
 @media (min-width:760px){.item.hp{grid-template-columns:100px 1fr}.item.hp .pic{width:100px;height:100px}}
 .gal img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}.gal div:before{z-index:1}.gal span{z-index:2}
+
+/* ===== Animaciones extra ===== */
+.hero{overflow:hidden}.hero h1{position:relative}
+.hst{position:absolute;left:0;top:-34px;width:64px;height:40px;pointer-events:none;overflow:visible}.hst .stm{stroke-width:2.5}
+@media (max-width:760px){.hst{left:50%;margin-left:-32px}}
+.hero-img{will-change:transform}
+.tabs{position:relative}.tabs button[aria-selected="true"]{border-color:transparent}
+.tab-ind{position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--gold);transition:left .35s cubic-bezier(.4,0,.2,1),width .35s cubic-bezier(.4,0,.2,1);pointer-events:none}
+@keyframes itemIn{from{opacity:0;transform:translateY(14px)}}
+.list.on .item{animation:itemIn .5s cubic-bezier(.2,.7,.2,1) both}
+.list.on .item:nth-child(1){animation-delay:.02s}.list.on .item:nth-child(2){animation-delay:.07s}.list.on .item:nth-child(3){animation-delay:.12s}.list.on .item:nth-child(4){animation-delay:.17s}.list.on .item:nth-child(5){animation-delay:.22s}.list.on .item:nth-child(6){animation-delay:.27s}.list.on .item:nth-child(7){animation-delay:.32s}.list.on .item:nth-child(n+8){animation-delay:.36s}
+footer,.promo{position:relative;overflow:hidden}footer>*:not(.beans),.promo>*:not(.beans){position:relative;z-index:1}
+.beans{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+.beans i{position:absolute;top:-12%;display:block;color:#e0ccb4;animation:bfall linear infinite}.beans i svg{display:block;width:100%;height:100%}
+.beans.pause i{animation-play-state:paused}
+@keyframes bfall{from{top:-14%;transform:translateX(0) rotate(0)}50%{transform:translateX(var(--dx)) rotate(calc(var(--r) / 2))}to{top:112%;transform:translateX(calc(var(--dx) * -.6)) rotate(var(--r))}}
+.cel{position:fixed;inset:0;z-index:40;pointer-events:none;display:flex;align-items:center;justify-content:center;animation:celo 2.8s forwards}
+@keyframes celo{0%{opacity:0}8%{opacity:1}80%{opacity:1}100%{opacity:0}}
+.cup2{background:rgba(42,20,10,.94);border:1px solid #e0ccb4;padding:20px 30px 16px;text-align:center;color:#f3e7d3;animation:pop .4s}
+.cup2 b{display:block;font:700 1.4rem "Barlow Condensed","Arial Narrow",sans-serif;letter-spacing:.06em;color:#e0ccb4}
+.cup2 .cf{transform-box:fill-box;transform-origin:bottom;transform:scaleY(0);animation:cfill 1.3s .2s ease-out forwards}
+@keyframes cfill{to{transform:scaleY(1)}}
+.cel>i{position:absolute;left:50%;top:46%;width:8px;height:12px;border-radius:1px;animation:cburst 1.4s ease-out forwards}
+@keyframes cburst{from{transform:translate(0,0) rotate(0);opacity:1}to{transform:translate(var(--x),var(--y)) rotate(var(--r));opacity:0}}
 </style>
 </head>
 <body>
@@ -190,7 +214,7 @@ section .btn:not(.out){background:var(--gold);color:var(--bg)}
   <div class="wrap">
     <div>
       <div class="eyebrow">Cafetería y café bar · Nanegalito <span id="op"></span></div>
-      <h1>Una parada en el camino,<br><em>un pueblo por descubrir.</em></h1>
+      <h1><svg class="hst" viewBox="0 0 80 40" aria-hidden="true"><path class="stm" d="M20 38q-8-10 0-18t0-14"/><path class="stm b" d="M40 38q-8-10 0-18t0-14"/><path class="stm c" d="M60 38q-8-10 0-18t0-14"/></svg>Una parada en el camino,<br><em>un pueblo por descubrir.</em></h1>
       <p>Nos armamos sobre dos carros clásicos en el Chocó Andino. Desayunos típicos, café de la zona y postres artesanales, todos los días.</p>
       <div class="btns"><a class="btn" href="#menu">Ver el menú</a><a class="btn ghost" href="#visitanos">Cómo llegar</a></div>
     </div>
@@ -537,6 +561,50 @@ document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener
   b.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});
 })});
 </script>
+<script>
+(function(){
+  var RM=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  /* 5. indicador deslizante de pestañas */
+  var tabs=document.querySelector('.tabs');
+  if(tabs){
+    var ind=document.createElement('span');ind.className='tab-ind';tabs.appendChild(ind);
+    var mv=function(){var b=tabs.querySelector('button[aria-selected="true"]');if(!b)return;ind.style.left=b.offsetLeft+'px';ind.style.width=b.offsetWidth+'px'};
+    tabs.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){setTimeout(mv,0)})});
+    mv();addEventListener('resize',mv);addEventListener('load',mv);
+    if(document.fonts&&document.fonts.ready)document.fonts.ready.then(mv);
+  }
+  /* 6. parallax suave de la foto principal */
+  var hi=document.querySelector('.hero-img'),tk=false;
+  if(hi&&!RM)addEventListener('scroll',function(){if(tk)return;tk=true;requestAnimationFrame(function(){hi.style.transform='translateY('+(Math.min(Math.max(scrollY,0),500)*.08).toFixed(1)+'px)';tk=false})},{passive:true});
+  /* 7. granos de cafe cayendo (promos y pie de pagina) */
+  var BEAN='<svg viewBox="0 0 20 28" aria-hidden="true"><ellipse cx="10" cy="14" rx="8" ry="12" fill="currentColor"/><path d="M10 3c-5 7 5 15 0 22" stroke="#2a140a" stroke-width="2" fill="none" stroke-linecap="round"/></svg>';
+  var bio=('IntersectionObserver' in window)?new IntersectionObserver(function(es){es.forEach(function(e){e.target.classList.toggle('pause',!e.isIntersecting)})}):null;
+  function beans(el,n){
+    if(RM||el.querySelector(':scope>.beans'))return;
+    var d=document.createElement('div');d.className='beans pause';d.setAttribute('aria-hidden','true');
+    for(var i=0;i<n;i++){
+      var sz=10+Math.random()*12,b=document.createElement('i');
+      b.style.cssText='left:'+(Math.random()*96).toFixed(1)+'%;width:'+sz.toFixed(0)+'px;height:'+(sz*1.4).toFixed(0)+'px;opacity:'+(.14+Math.random()*.24).toFixed(2)+';filter:blur('+(sz<13?1.2:0)+'px);--dx:'+((Math.random()*60-30)|0)+'px;--r:'+((Math.random()*540-270)|0)+'deg;animation-duration:'+(8+Math.random()*7).toFixed(1)+'s;animation-delay:-'+(Math.random()*12).toFixed(1)+'s';
+      b.innerHTML=BEAN;d.appendChild(b);
+    }
+    el.insertBefore(d,el.firstChild);if(bio)bio.observe(d);else d.classList.remove('pause');
+  }
+  var ft=document.querySelector('footer');if(ft)beans(ft,9);
+  var pr=document.getElementById('pr');
+  if(pr){var sweep=function(){pr.querySelectorAll('.promo').forEach(function(p){beans(p,10)})};sweep();new MutationObserver(sweep).observe(pr,{childList:true,subtree:true})}
+  /* 8. taza que se llena + confeti al enviar el pedido */
+  window.celebrate=function(){
+    if(RM)return;
+    var o=document.createElement('div');o.className='cel';
+    var cup='M54 84h92v30q0 36-46 36t-46-36z';
+    var h='<div class="cup2"><svg viewBox="0 0 200 170" width="120" height="102" aria-hidden="true"><defs><clipPath id="cupc"><path d="'+cup+'"/></clipPath></defs><path class="stm" d="M80 74q-10-14 0-26t0-20"/><path class="stm b" d="M104 74q-10-14 0-26t0-20"/><path d="M146 96h10q16 0 16 16t-16 16h-12" fill="none" stroke="#f3e7d3" stroke-width="8" stroke-linecap="round"/><path d="'+cup+'" fill="rgba(243,231,211,.12)" stroke="#f3e7d3" stroke-width="4"/><rect class="cf" clip-path="url(#cupc)" x="54" y="84" width="92" height="66" fill="#7a3f1d"/><ellipse cx="100" cy="160" rx="62" ry="6" fill="#e0ccb4" opacity=".6"/></svg><b>¡Gracias por tu pedido!</b></div>';
+    var c=['#e0ccb4','#ecc277','#7a3f1d','#f3e7d3','#4caf50'];
+    for(var i=0;i<26;i++){var a=Math.random()*Math.PI*2,d=90+Math.random()*140;
+      h+='<i style="--x:'+(Math.cos(a)*d).toFixed(0)+'px;--y:'+(Math.sin(a)*d-40).toFixed(0)+'px;--r:'+((Math.random()*720-360)|0)+'deg;background:'+c[i%5]+';animation-delay:'+(Math.random()*.15).toFixed(2)+'s"></i>'}
+    o.innerHTML=h;document.body.appendChild(o);setTimeout(function(){o.remove()},2800);
+  };
+})();
+</script>
 <!-- SDKs de Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
@@ -788,7 +856,7 @@ go.addEventListener('click', e => {
   if (tipo == 'Para servir' && !mesa) { e.preventDefault(); sh.classList.add('on'); rs(); syncActionBtn(); $('er').textContent = 'Elige tu número de mesa para continuar.'; return; }
   const s = sum(); if (!s.q) { e.preventDefault(); return; }
   go.href = 'https://wa.me/' + WSP + '?text=' + encodeURIComponent(msg());
-  sent = true; go.classList.add('sent'); go.textContent = '✓ ¡Pedido enviado!'; rs();
+  sent = true; go.classList.add('sent'); go.textContent = '✓ ¡Pedido enviado!'; rs(); if (window.celebrate) celebrate();
   addDoc(collection(db, 'orders'), { t: Date.now(), tipo, detalle: lugar(), pago, note: nota, items: s.l.map(x => x.slice(2)).join(', '), total: s.t, lines: Object.values(cart).map(c => ({ n: c.n, v: c.vars, q: c.q, t: +(c.q * c.p).toFixed(2) })), done: false, anulado: false, cancelledFromPending: false })
     .then(r => trackOrder(r.id, s.t)).catch(err => { console.error('Error guardando pedido:', err); showEst('e'); });
   setTimeout(() => { sh.classList.remove('on'); syncActionBtn(); }, 1500);
