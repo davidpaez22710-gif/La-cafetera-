@@ -490,6 +490,8 @@ footer,.promo{position:relative;overflow:hidden}footer>*:not(.beans),.promo>*:no
   <div class="card" style="margin-top:20px"><h3>Horario de atención</h3>
     <p style="margin:0 0 12px;color:var(--muted);font-size:.88rem">Los pedidos solo se podrán enviar dentro de estos horarios. Si un día está desmarcado, aparecerá como cerrado.</p>
     <div id="ph"></div>
+    <div class="pf" style="margin:16px 0 0;align-items:center"><label>Tiempo de preparación (min) <input id="prepm" type="number" min="1" max="180" step="1" value="15" style="max-width:90px"></label><button class="sm" id="prepb">Guardar</button><span id="prepmsg" style="color:var(--muted);font-size:.85rem"></span></div>
+    <p style="margin:6px 0 0;color:var(--muted);font-size:.82rem">Es el tiempo estimado que verá el cliente después de enviar su pedido. Cámbialo según qué tan lleno esté el café.</p>
     <div class="bts" style="margin-top:16px;align-items:center"><button class="sm" id="hreset">Restaurar horario inicial</button><span id="hmsg" style="color:var(--muted);font-size:.85rem"></span></div>
   </div>
   <div class="card" style="margin-top:20px"><h3>Editar menú</h3><div id="pm"></div>
@@ -597,7 +599,7 @@ document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener
     if(RM)return;
     var o=document.createElement('div');o.className='cel';
     var cup='M54 84h92v30q0 36-46 36t-46-36z';
-    var h='<div class="cup2"><svg viewBox="0 0 200 170" width="120" height="102" aria-hidden="true"><defs><clipPath id="cupc"><path d="'+cup+'"/></clipPath></defs><path class="stm" d="M80 74q-10-14 0-26t0-20"/><path class="stm b" d="M104 74q-10-14 0-26t0-20"/><path d="M146 96h10q16 0 16 16t-16 16h-12" fill="none" stroke="#f3e7d3" stroke-width="8" stroke-linecap="round"/><path d="'+cup+'" fill="rgba(243,231,211,.12)" stroke="#f3e7d3" stroke-width="4"/><rect class="cf" clip-path="url(#cupc)" x="54" y="84" width="92" height="66" fill="#7a3f1d"/><ellipse cx="100" cy="160" rx="62" ry="6" fill="#e0ccb4" opacity=".6"/></svg><b>¡Gracias por tu pedido!</b></div>';
+    var h='<div class="cup2"><svg viewBox="0 0 200 170" width="120" height="102" aria-hidden="true"><defs><clipPath id="cupc"><path d="'+cup+'"/></clipPath></defs><path class="stm" d="M80 74q-10-14 0-26t0-20"/><path class="stm b" d="M104 74q-10-14 0-26t0-20"/><path d="M146 96h10q16 0 16 16t-16 16h-12" fill="none" stroke="#f3e7d3" stroke-width="8" stroke-linecap="round"/><path d="'+cup+'" fill="rgba(243,231,211,.12)" stroke="#f3e7d3" stroke-width="4"/><rect class="cf" clip-path="url(#cupc)" x="54" y="84" width="92" height="66" fill="#7a3f1d"/><ellipse cx="100" cy="160" rx="62" ry="6" fill="#e0ccb4" opacity=".6"/></svg><b>¡Gracias por tu pedido!</b><small style="display:block;margin-top:4px;color:rgba(243,231,211,.85)">Estará listo en ~'+(window.PREP_MIN||15)+' min</small></div>';
     var c=['#e0ccb4','#ecc277','#7a3f1d','#f3e7d3','#4caf50'];
     for(var i=0;i<26;i++){var a=Math.random()*Math.PI*2,d=90+Math.random()*140;
       h+='<i style="--x:'+(Math.cos(a)*d).toFixed(0)+'px;--y:'+(Math.sin(a)*d-40).toFixed(0)+'px;--r:'+((Math.random()*720-360)|0)+'deg;background:'+c[i%5]+';animation-delay:'+(Math.random()*.15).toFixed(2)+'s"></i>'}
@@ -692,6 +694,7 @@ rg.onclick = e => {
   rg.href = 'https://wa.me/' + WSP + '?text=' + encodeURIComponent('Hola La Cafetera, quiero reservar mesa a nombre de ' + n + ' para ' + $('rp').value + ' persona(s) el ' + d + ' a las ' + $('rh').value + '.');
 };
 
+let PREP = 15, ordT = 0, curSt = '', curTot = null;
 let cart = {}, sent = false, tipo = 'Para llevar', modo = 'Recoger en el local', mesa = '', pago = 'Efectivo', nota = '';
 const wa = document.querySelector('.wa'), bar = document.createElement('div');
 bar.className = 'bar';
@@ -774,7 +777,7 @@ function reset() { cart = {}; nota = ''; mesa = ''; tipo = 'Para llevar'; modo =
 
 function rs() {
   let h = '<h3>Tu pedido</h3>';
-  if (sent) h += '<small class="hn" style="color:#4ade80">✓ Pedido enviado. Las opciones están bloqueadas; toca ✕ abajo para empezar uno nuevo.</small>';
+  if (sent) h += '<small class="hn" style="color:#4ade80">✓ Pedido enviado. Estará listo en ~' + PREP + ' min. Las opciones están bloqueadas; toca ✕ abajo para empezar uno nuevo.</small>';
   else if (!isOpenNow()) h += '<small class="hn" style="color:#ff9b7d">⏰ Estamos cerrados en este momento. ' + E(todayScheduleText()) + '</small>';
   const dis = sent ? ' disabled' : '';
   for (const k in cart) { const c = cart[k];
@@ -1363,16 +1366,23 @@ const fdate = d => new Date(d + 'T00:00:00').toLocaleDateString('es', { day: 'nu
 /* ===== Estado del pedido para el cliente (pendiente / listo) ===== */
 const est = document.createElement('div'); est.className = 'est'; est.style.display = 'none'; bar.after(est);
 let unO = null, lastSt = '';
+function etaText() {
+  if (!ordT) return 'Estamos revisando tu pedido…';
+  const left = Math.ceil((ordT + PREP * 6e4 - Date.now()) / 6e4);
+  return left > 1 ? 'Estará listo en ~' + left + ' min' : left == 1 ? 'Estará listo en ~1 min' : 'Ya casi está listo, gracias por esperar';
+}
 function showEst(st, tot) {
-  const M = { p: ['⏳', 'Pedido pendiente', 'Estamos revisando tu pedido…'], r: ['✅', '¡Pedido listo!', 'Gracias por tu compra. ¡Que lo disfrutes!'], a: ['⚠️', 'Pedido anulado', 'Escríbenos por WhatsApp si necesitas ayuda.'], e: ['⚠️', 'No pudimos registrar tu pedido', 'Confírmalo por WhatsApp.'] }[st];
+  curSt = st; curTot = tot;
+  const M = { p: ['⏳', 'Pedido recibido', etaText()], r: ['✅', '¡Pedido listo!', 'Gracias por tu compra. ¡Que lo disfrutes!'], a: ['⚠️', 'Pedido anulado', 'Escríbenos por WhatsApp si necesitas ayuda.'], e: ['⚠️', 'No pudimos registrar tu pedido', 'Confírmalo por WhatsApp.'] }[st];
   est.className = 'est ' + st; est.style.display = '';
   est.innerHTML = '<span class="ic">' + M[0] + '</span><div><b>' + M[1] + '</b><small>' + M[2] + (tot != null ? ' · $' + Number(tot).toFixed(2) : '') + '</small></div><button aria-label="Cerrar" id="estx">✕</button>';
   $('estx').onclick = () => { clearEst(); if (sent) reset(); };
 }
 function clearEst() { if (unO) unO(); unO = null; est.style.display = 'none'; delete mem.pedido_activo; try { localStorage.removeItem('pedido_activo'); } catch (e) {} }
-function trackOrder(id, tot, resumed) {
+function trackOrder(id, tot, resumed, t0) {
   if (unO) unO(); lastSt = resumed ? 'x' : '';
-  lss('pedido_activo', JSON.stringify({ id, total: tot, t: Date.now() }));
+  ordT = t0 || Date.now();
+  lss('pedido_activo', JSON.stringify({ id, total: tot, t: ordT }));
   showEst('p', tot);
   unO = onSnapshot(doc(db, 'orders', id), sn => {
     if (!sn.exists()) { clearEst(); return; }
@@ -1382,7 +1392,24 @@ function trackOrder(id, tot, resumed) {
     lastSt = st;
   }, e => console.error(e));
 }
-try { const sv = JSON.parse(lsg('pedido_activo') || 'null'); if (sv && Date.now() - sv.t < 432e5) trackOrder(sv.id, sv.total, true); } catch (e) {}
+try { const sv = JSON.parse(lsg('pedido_activo') || 'null'); if (sv && Date.now() - sv.t < 432e5) trackOrder(sv.id, sv.total, true, sv.t); } catch (e) {}
+setInterval(() => { if (curSt == 'p' && est.style.display != 'none') showEst('p', curTot); }, 30000);
+
+/* Tiempo de preparación (lo configura el dueño en el panel) */
+const prDoc = doc(db, 'settings', 'prep');
+window.PREP_MIN = PREP;
+onSnapshot(prDoc, sn => {
+  if (sn.exists() && +sn.data().min > 0) PREP = Math.round(+sn.data().min);
+  window.PREP_MIN = PREP;
+  if ($('prepm') && document.activeElement !== $('prepm')) $('prepm').value = PREP;
+  if (curSt == 'p' && est.style.display != 'none') showEst('p', curTot);
+}, e => console.error(e));
+$('prepb').onclick = () => {
+  const m = Math.round(+$('prepm').value);
+  if (!(m >= 1 && m <= 180)) { $('prepmsg').textContent = 'Escribe un número entre 1 y 180.'; return; }
+  setDoc(prDoc, { min: m }).then(() => { $('prepmsg').textContent = 'Guardado: ' + m + ' min.'; setTimeout(() => { $('prepmsg').textContent = ''; }, 2500); })
+    .catch(err => { console.error(err); $('prepmsg').textContent = 'No se pudo guardar.'; });
+};
 
 function drawPromos() {
   const L = PROMOS.filter(pOk).sort((a, b) => a.o - b.o);
