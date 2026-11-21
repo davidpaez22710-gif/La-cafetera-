@@ -19,7 +19,7 @@ box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:en
 :root[data-theme="dark"]{--bg:#2a140a;--surface:#351b0f;--text:#f3e7d9;--muted:#cdb8a3;--gold:#e0ccb4;--line:#54301d;color-scheme:dark}
 html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 64px);scroll-behavior:smooth}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.7 "Open Sans",system-ui,-apple-system,"Segoe UI",sans-serif;overflow-x:hidden}
+body{margin:0;padding-bottom:84px;background:var(--bg);color:var(--text);font:16px/1.7 "Open Sans",system-ui,-apple-system,"Segoe UI",sans-serif;overflow-x:hidden}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--hero);z-index:30}
 h1,h2,h3{font-family:"Barlow Condensed","Arial Narrow",sans-serif;margin:0;line-height:1.1}
 a{color:inherit}
@@ -1267,6 +1267,14 @@ onSnapshot(col, s => {
     if (x.tag == null) x.tag = '';
     return x; 
   }) : SEED.slice();
+  if (live) {
+    /* Quita productos viejos que vienen de una versión anterior del menú (ids m0, m1... que ya no existen en el HTML)
+       y agrega los productos del HTML que aún no están en la base (tortas enteras, etc.) */
+    const seedNames = new Set(SEED.map(m => m.cat + '|' + m.name));
+    MENU = MENU.filter(m => !(/^m\d+$/.test(m.id) && !seedNames.has(m.cat + '|' + m.name)));
+    const have = new Set(MENU.map(m => m.cat + '|' + m.name));
+    SEED.forEach(m => { if (!have.has(m.cat + '|' + m.name)) MENU.push({ ...m, id: 'seed_' + m.id }); });
+  }
   draw();
 }, e => console.error(e));
 
