@@ -665,7 +665,7 @@ document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
-import { getFirestore, collection, setDoc, doc, deleteDoc, addDoc, updateDoc, onSnapshot, query, orderBy, limit, where, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
+import { getFirestore, collection, setDoc, doc, deleteDoc, addDoc, updateDoc, onSnapshot, query, orderBy, limit, where, getDoc, getDocs, runTransaction } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBEN6C9n8rp4SzBXUqdZ4gvdUT9AMkenNQ",
@@ -677,6 +677,15 @@ const firebaseConfig = {
   measurementId: "G-P7PLS0ZDX7"
 };
 const fbApp = initializeApp(firebaseConfig);
+/* Firebase App Check: pega aquí la clave de sitio reCAPTCHA v3 (Consola Firebase > App Check > Apps > Web).
+   Mientras esté vacía, App Check no se activa y la página funciona igual. */
+const APPCHECK_SITE_KEY = '';
+if (APPCHECK_SITE_KEY) {
+  try {
+    const ac = await import("https://www.gstatic.com/firebasejs/13.4.0/firebase-app-check.js");
+    ac.initializeAppCheck(fbApp, { provider: new ac.ReCaptchaV3Provider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+  } catch (e) { console.error('App Check no se pudo iniciar:', e); }
+}
 const db = getFirestore(fbApp);
 const auth = getAuth(fbApp);
 const $ = i => document.getElementById(i);
@@ -856,7 +865,7 @@ function rs() {
     if (deliv()) h += '<small class="hn">📍 Al enviar, comparte tu ubicación en el chat de WhatsApp (clip → Ubicación) para el delivery.</small>';
   }
   h += '<label>Forma de pago</label><select id="pago"' + dis + '>' + op('Efectivo', pago) + op('Transferencia Bancaria', pago) + (deliv() ? '' : op('Tarjeta en caja', pago)) + '</select>' +
-    '<label>Nota</label><input id="nt" placeholder="Ej. sin azúcar, bien caliente" value="' + E(nota) + '"' + dis + '><small id="er" class="hn" style="color:#ff9b7d"></small></div>';
+    '<label>Nota</label><input id="nt" maxlength="200" placeholder="Ej. sin azúcar, bien caliente" value="' + E(nota) + '"' + dis + '><small id="er" class="hn" style="color:#ff9b7d"></small></div>';
   sh.innerHTML = h;
 }
 sh.addEventListener('input', e => { if (sent) return; if (e.target.id == 'nt') { nota = e.target.value; refresh(); } });
@@ -1067,7 +1076,8 @@ function po() {
   const P = orders.filter(d => { const o = d.data(); return !o.done && !o.anulado && !/^Promo/.test(o.tipo || ''); });
   $('po').innerHTML = P.length ? P.map(d => {
     const o = d.data();
-    return '<div class="po" style="border-left:4px solid #e0ccb4;padding-left:10px"><div><b>⏳ ' + E(o.tipo) + '</b> · Total: <b>$' + Number(o.total).toFixed(2) + '</b><br>' +
+    const dif = Array.isArray(o.lines) && Math.abs(o.lines.reduce((a, l) => a + (+l.t || 0), 0) - Number(o.total)) > 0.01;
+    return '<div class="po" style="border-left:4px solid ' + (dif ? '#f87171' : '#e0ccb4') + ';padding-left:10px"><div><b>⏳ ' + E(o.tipo) + '</b> · Total: <b>$' + Number(o.total).toFixed(2) + '</b>' + (dif ? ' <b style="color:#f87171">⚠️ el total no coincide con los productos</b>' : '') + '<br>' +
       '<small style="color:var(--muted)">' + E(o.items) + '</small><br><small><b>Pago:</b> ' + E(o.pago) + ' | <b>Detalle:</b> ' + E(o.detalle) + '</small>' +
       (o.note ? '<br><small style="color:var(--gold)"><b>Nota:</b> ' + E(o.note) + '</small>' : '') + (PRINTED.has(d.id) ? '<br><small style="color:var(--muted)">🖨 Ticket impreso</small>' : '') + '</div><span>' +
       new Date(o.t).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) + '</span>' +
@@ -1560,12 +1570,19 @@ function loadCoupons() {
 $('cbt').onclick = async () => {
   const code = $('cin').value.trim().toUpperCase(), m = $('cmsg'); if (!code) return;
   try {
-    const r = doc(db, 'coupons', code), sn = await getDoc(r);
-    if (!sn.exists()) { m.textContent = 'Ese cupón no existe.'; return; }
-    const c = sn.data();
-    if (c.used) { m.textContent = 'Ya fue canjeado.'; return; }
-    if (c.exp && Date.now() > new Date(c.exp + 'T23:59:59').getTime()) { m.textContent = 'Está vencido.'; return; }
-    await updateDoc(r, { used: true, usedAt: Date.now() }); m.textContent = '✓ Cupón canjeado: ' + c.promo; $('cin').value = '';
+    const r = doc(db, 'coupons', code);
+    /* Transacción: dos canjes simultáneos del mismo cupón no pueden pasar los dos */
+    const res = await runTransaction(db, async tx => {
+      const sn = await tx.get(r);
+      if (!sn.exists()) return { err: 'Ese cupón no existe.' };
+      const c = sn.data();
+      if (c.used) return { err: 'Ya fue canjeado.' };
+      if (c.exp && Date.now() > new Date(c.exp + 'T23:59:59').getTime()) return { err: 'Está vencido.' };
+      tx.update(r, { used: true, usedAt: Date.now() });
+      return { promo: c.promo };
+    });
+    if (res.err) { m.textContent = res.err; return; }
+    m.textContent = '✓ Cupón canjeado: ' + res.promo; $('cin').value = '';
   } catch (e) { console.error(e); m.textContent = 'No se pudo canjear. Revisa tus permisos.'; }
 };
 
