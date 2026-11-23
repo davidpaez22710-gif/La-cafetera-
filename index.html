@@ -267,7 +267,7 @@ nav a.cta{padding:8px 12px;letter-spacing:.08em;font-size:.72rem;white-space:now
   function ec(){var o={};try{new Intl.DateTimeFormat('en-US',{timeZone:'America/Guayaquil',hourCycle:'h23',weekday:'short',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date()).forEach(function(x){o[x.type]=x.value})}catch(e){var d=new Date(Date.now()-5*36e5);return{w:d.getUTCDay(),m:d.getUTCHours()*60+d.getUTCMinutes()}}return{w:{Sun:0,Mon:1,Tue:2,Wed:3,Thu:4,Fri:5,Sat:6}[o.weekday],m:(+o.hour%24)*60+(+o.minute)}}
   function tm(s){var a=(s||'0:0').split(':');return(+a[0]||0)*60+(+a[1]||0)}
   /* horario de respaldo: el ultimo guardado desde Firebase, o 7:00 a 20:00 (hora de Ecuador) */
-  function isOpen(){var n=ec(),c=null;try{var h=JSON.parse(localStorage.getItem('hours_cache')||'null');c=h&&h[n.w]}catch(e){}c=c||{open:true,start:'07:00',end:'20:00'};return!!c.open&&n.m>=tm(c.start)&&n.m<tm(c.end)}
+  function isOpen(){var n=ec(),c=null;try{var h=JSON.parse(localStorage.getItem('hours_cache')||'null');c=h&&h[n.w]}catch(e){}c=c||{open:true,start:'07:00',end:'20:00'};var p=null;try{var h2=JSON.parse(localStorage.getItem('hours_cache')||'null');p=h2&&h2[(n.w+6)%7]}catch(e){}var a=tm(c.start),b=tm(c.end);if(c.open&&(b>a?(n.m>=a&&n.m<b):n.m>=a))return true;return!!(p&&p.open&&tm(p.end)<=tm(p.start)&&n.m<tm(p.end))}
   window.setScene=function(open){var sc=document.querySelector('.scene');if(!sc)return;var c=open?'open':'closed';if(sc.classList.contains(c))return;sc.classList.add('mv');sc.classList.remove(open?'closed':'open');sc.classList.add(c);clearTimeout(sc._t);sc._t=setTimeout(function(){sc.classList.remove('mv')},4600)};
   setTimeout(function(){if(!window.__hl)window.setScene(isOpen())},300);
   setInterval(function(){if(!window.__hl)window.setScene(isOpen())},30000);
@@ -664,7 +664,7 @@ document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener
 <!-- SDKs de Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
 import { getFirestore, collection, setDoc, doc, deleteDoc, addDoc, updateDoc, onSnapshot, query, orderBy, limit, where, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -718,9 +718,14 @@ function nowEC() {
   return { date: o.year + '-' + o.month + '-' + o.day, w: WD[o.weekday], mins: (+o.hour) * 60 + (+o.minute) };
 }
 function isOpenNow() {
-  const n = nowEC(), cfg = HOURS[n.w];
-  if (!cfg || !cfg.open) return false;
-  return n.mins >= toMins(cfg.start) && n.mins < toMins(cfg.end);
+  const n = nowEC(), cfg = HOURS[n.w], prev = HOURS[(n.w + 6) % 7];
+  /* Si el cierre es igual o menor que la apertura (ej. 9:00 a 1:00 a.m.), cierra después de medianoche */
+  if (cfg && cfg.open) {
+    const a = toMins(cfg.start), b = toMins(cfg.end);
+    if (b > a ? (n.mins >= a && n.mins < b) : n.mins >= a) return true;
+  }
+  if (prev && prev.open && toMins(prev.end) <= toMins(prev.start) && n.mins < toMins(prev.end)) return true;
+  return false;
 }
 function todayScheduleText() {
   const cfg = HOURS[nowEC().w];
@@ -745,7 +750,7 @@ rg.onclick = e => {
   const h = $('rh').value, cfg = HOURS[new Date(d + 'T00:00:00').getDay()], hm = toMins(h), nw = nowEC();
   if (!h) { e.preventDefault(); $('rm').textContent = 'Elige la hora de tu reserva.'; return; }
   if (!cfg || !cfg.open) { e.preventDefault(); $('rm').textContent = 'Ese día estamos cerrados. Elige otra fecha.'; return; }
-  if (hm < toMins(cfg.start) || hm > toMins(cfg.end) - RES_MARGIN) { e.preventDefault(); $('rm').textContent = 'Ese día atendemos de ' + cfg.start + ' a ' + cfg.end + '. Recibimos reservas hasta ' + RES_MARGIN + ' min antes del cierre.'; return; }
+  if (hm < toMins(cfg.start) || hm > (toMins(cfg.end) <= toMins(cfg.start) ? toMins(cfg.end) + 1440 : toMins(cfg.end)) - RES_MARGIN) { e.preventDefault(); $('rm').textContent = 'Ese día atendemos de ' + cfg.start + ' a ' + cfg.end + '. Recibimos reservas hasta ' + RES_MARGIN + ' min antes del cierre.'; return; }
   if (d == nw.date && hm <= nw.mins) { e.preventDefault(); $('rm').textContent = 'Esa hora ya pasó. Elige una hora posterior.'; return; }
   $('rm').textContent = ''; rg.target = '_blank';
   rg.href = 'https://wa.me/' + WSP + '?text=' + encodeURIComponent('Hola La Cafetera, quiero reservar mesa a nombre de ' + n + ' para ' + $('rp').value + ' persona(s) el ' + d + ' a las ' + $('rh').value + '.');
@@ -1621,6 +1626,8 @@ if (new URLSearchParams(location.search).has('admin')) {
     '<h3 style="margin:0;font-size:20px">Acceso del dueño</h3>' +
     '<input id="ale" type="email" autocomplete="username" placeholder="Correo" required style="padding:12px;border-radius:10px;border:1px solid #444;background:#2a2a2a;color:#fff;font-size:16px">' +
     '<input id="alp" type="password" autocomplete="current-password" placeholder="Contraseña" required style="padding:12px;border-radius:10px;border:1px solid #444;background:#2a2a2a;color:#fff;font-size:16px">' +
+    '<button type="button" id="alg" style="padding:12px;border:0;border-radius:10px;background:#fff;color:#111;font-weight:700;font-size:16px">Entrar con Google</button>' +
+    '<div style="text-align:center;color:#888;font-size:12px">o con correo</div>' +
     '<button type="submit" style="padding:12px;border:0;border-radius:10px;background:#e8a33d;color:#000;font-weight:700;font-size:16px">Entrar</button>' +
     '<div id="alm" style="color:#f87171;font-size:14px;min-height:18px"></div></form>';
   document.body.appendChild(ov);
@@ -1629,6 +1636,10 @@ if (new URLSearchParams(location.search).has('admin')) {
   lo.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:99998;display:none;padding:8px 12px;border-radius:10px;border:0;background:#333;color:#fff;font-size:13px';
   lo.onclick = () => signOut(auth).then(() => location.reload());
   document.body.appendChild(lo);
+  ov.querySelector('#alg').onclick = () => {
+    const m = ov.querySelector('#alm'); m.textContent = '';
+    signInWithPopup(auth, new GoogleAuthProvider()).catch(err => { m.textContent = 'No se pudo entrar con Google (' + (err && err.code ? err.code : 'error') + ').'; });
+  };
   ov.querySelector('#alf').onsubmit = e => {
     e.preventDefault();
     const m = ov.querySelector('#alm'); m.textContent = '';
