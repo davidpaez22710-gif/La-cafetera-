@@ -1648,6 +1648,11 @@ if (new URLSearchParams(location.search).has('admin')) {
   };
   onAuthStateChanged(auth, user => {
     if (!user) { ov.style.display = 'flex'; return; }
+    if (user.uid !== '2bhs1BPiF3aUQ1HHIg3snB2xGN43') {
+      /* Cuenta que no es del dueño: se cierra la sesión y no se carga nada del panel */
+      signOut(auth).then(() => { ov.style.display = 'flex'; ov.querySelector('#alm').textContent = 'Esta cuenta no tiene permiso de dueño.'; });
+      return;
+    }
     ov.style.display = 'none'; lo.style.display = 'block';
     if (adminStarted) return; adminStarted = true;
     $('panel').classList.add('on'); $('pl').classList.add('on'); pm(); renderHoursAdmin();
