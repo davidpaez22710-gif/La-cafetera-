@@ -664,6 +664,7 @@ document.querySelectorAll('.tabs button').forEach(function(b){b.addEventListener
 <!-- SDKs de Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
 import { getFirestore, collection, setDoc, doc, deleteDoc, addDoc, updateDoc, onSnapshot, query, orderBy, limit, where, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -675,7 +676,9 @@ const firebaseConfig = {
   appId: "1:101365607472:web:9337e221d3ea7c053611f5",
   measurementId: "G-P7PLS0ZDX7"
 };
-const db = getFirestore(initializeApp(firebaseConfig));
+const fbApp = initializeApp(firebaseConfig);
+const db = getFirestore(fbApp);
+const auth = getAuth(fbApp);
 const $ = i => document.getElementById(i);
 const WSP = '593984807355', MESAS = 20;
 const E = x => String(x).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -1609,11 +1612,38 @@ $('rl').onclick = e => {
   updateDoc(doc(db, 'orders', d.id), { anulado: !o.anulado }).catch(fail);
 };
 
-if (new URLSearchParams(location.search).get('admin') === 'miapp123') {
-  $('panel').classList.add('on'); $('pl').classList.add('on'); pm(); renderHoursAdmin();
-  onSnapshot(query(oc, orderBy('t', 'desc'), limit(30)), s => { orders = s.docs; po(); }, e => console.error(e));
-  loadR(); loadCoupons();
-  ADMIN = true; cleanCoupons(); setInterval(cleanCoupons, 36e5);
+if (new URLSearchParams(location.search).has('admin')) {
+  /* Login real del dueño (Firebase Authentication). Sin sesión no se muestra ni se carga nada del panel. */
+  let adminStarted = false;
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif';
+  ov.innerHTML = '<form id="alf" style="background:#1c1c1c;color:#fff;padding:26px;border-radius:16px;max-width:340px;width:100%;display:flex;flex-direction:column;gap:12px">' +
+    '<h3 style="margin:0;font-size:20px">Acceso del dueño</h3>' +
+    '<input id="ale" type="email" autocomplete="username" placeholder="Correo" required style="padding:12px;border-radius:10px;border:1px solid #444;background:#2a2a2a;color:#fff;font-size:16px">' +
+    '<input id="alp" type="password" autocomplete="current-password" placeholder="Contraseña" required style="padding:12px;border-radius:10px;border:1px solid #444;background:#2a2a2a;color:#fff;font-size:16px">' +
+    '<button type="submit" style="padding:12px;border:0;border-radius:10px;background:#e8a33d;color:#000;font-weight:700;font-size:16px">Entrar</button>' +
+    '<div id="alm" style="color:#f87171;font-size:14px;min-height:18px"></div></form>';
+  document.body.appendChild(ov);
+  const lo = document.createElement('button');
+  lo.textContent = 'Cerrar sesión';
+  lo.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:99998;display:none;padding:8px 12px;border-radius:10px;border:0;background:#333;color:#fff;font-size:13px';
+  lo.onclick = () => signOut(auth).then(() => location.reload());
+  document.body.appendChild(lo);
+  ov.querySelector('#alf').onsubmit = e => {
+    e.preventDefault();
+    const m = ov.querySelector('#alm'); m.textContent = '';
+    signInWithEmailAndPassword(auth, ov.querySelector('#ale').value.trim(), ov.querySelector('#alp').value)
+      .catch(() => { m.textContent = 'Correo o contraseña incorrectos.'; });
+  };
+  onAuthStateChanged(auth, user => {
+    if (!user) { ov.style.display = 'flex'; return; }
+    ov.style.display = 'none'; lo.style.display = 'block';
+    if (adminStarted) return; adminStarted = true;
+    $('panel').classList.add('on'); $('pl').classList.add('on'); pm(); renderHoursAdmin();
+    onSnapshot(query(oc, orderBy('t', 'desc'), limit(30)), s => { orders = s.docs; po(); }, e => console.error(e));
+    loadR(); loadCoupons();
+    ADMIN = true; cleanCoupons(); setInterval(cleanCoupons, 36e5);
+  });
 }
 </script>
 <script>
